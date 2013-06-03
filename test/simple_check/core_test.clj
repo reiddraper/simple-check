@@ -1,7 +1,8 @@
 (ns simple-check.core-test
   (:use clojure.test)
   (:require [simple-check.core       :as sc]
-            [simple-check.generators :as gen]))
+            [simple-check.generators :as gen]
+            [simple-check.clojure-test :as ct :refer (defspec)]))
 
 ;; plus and 0 form a monoid
 ;; ---------------------------------------------------------------------------
@@ -74,3 +75,10 @@
                   (let [i (gen/int 100)
                         result (sc/quick-check 100 exception-thrower i)]
                     [(:result result) (get-in result [:shrunk :smallest])])))))
+
+;; exceptions shrink and return as result
+;; ---------------------------------------------------------------------------
+
+
+(binding [simple-check.clojure-test/*report-trials* true]
+  (defspec failing-spec 10000 (constantly true) (gen/int 100)))

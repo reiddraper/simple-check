@@ -87,7 +87,7 @@
   dot every 1000 trials reported."
   [{[so-far total] ::trial}]
   (when (pos? so-far)
-    (when (zero? (mod so-far 1000))
+    (when (zero? (mod so-far 100))
       (print ".")
       (flush))
     (when (== so-far total) (println))))
