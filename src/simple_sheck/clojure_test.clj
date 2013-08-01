@@ -1,7 +1,7 @@
-(ns simple-check.clojure-test
+(ns simple-sheck.clojure-test
   (:require [clojure.test :as ct]))
 
-(defn- assert-check
+(defn- assert-sheck
   [{:keys [result] :as m}]
   (println m)
   (if (instance? Throwable result)
@@ -9,7 +9,7 @@
     (ct/is result)))
 
 (defmacro defspec
-  "Defines a new clojure.test test var that uses `quick-check` to verify
+  "Defines a new clojure.test test var that uses `quick-sheck` to verify
   [property] with the given [args] (should be a sequence of generators),
   [default-times] times by default.  You can call the function defined as [name]
   with no arguments to trigger this test directly (i.e.  without starting a
@@ -20,14 +20,14 @@
      ;; consider my shame for introducing a cyclical dependency like this...
      ;; Don't think we'll know what the solution is until simple-check
      ;; integration with another test framework is attempted.
-     (require 'simple-check.core)
+     (require 'simple-sheck.core)
      (defn ~(vary-meta name assoc
                        ::defspec true
                        :test `#(#'assert-check (assoc (~name) :test-var (str '~name))))
        ([] (~name ~default-times))
        ([times# & {:keys [seed# max-size#] :as quick-check-opts#}]
           (apply
-           simple-check.core/quick-check
+           simple-sheck.core/quick-sheck
            times#
            (vary-meta ~property assoc :name (str '~property))
            (flatten (seq quick-check-opts#)))))))
@@ -38,11 +38,11 @@
 
   * false - no reporting of trials (default)
   * a function - will be passed a clojure.test/report-style map containing
-  :simple-check.core/property and :simple-check.core/trial slots
-  * true - provides quickcheck-style trial reporting (dots) via
+  :simple-sheck.core/property and :simple-sheck.core/trial slots
+  * true - provides quicksheck-style trial reporting (dots) via
   `trial-report-dots`
 
-  (Note that all reporting requires running `quick-check` within the scope of a
+  (Note that all reporting requires running `quick-sheck` within the scope of a
   clojure.test run (via `test-ns`, `test-all-vars`, etc.)
 
   Reporting functions offered by simple-check include `trial-report-dots` and
@@ -115,7 +115,7 @@
 
 (defn report-failure
   [property-fun result trial-number failing-params]
-  ;; TODO this is wrong, makes it impossible to clojure.test quickchecks that
+  ;; TODO this is wrong, makes it impossible to clojure.test quickshecks that
   ;; should fail...
   #_(ct/report (if (instance? Throwable result)
                  {:type :error

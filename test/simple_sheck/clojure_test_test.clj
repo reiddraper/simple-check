@@ -1,8 +1,8 @@
-(ns simple-check.clojure-test-test
+(ns simple-sheck.clojure-test-test
   (:use clojure.test)
-  (:require [simple-check.generators :as gen]
-            [simple-check.properties :as prop]
-            [simple-check.clojure-test :as ct :refer (defspec)]))
+  (:require [simple-sheck.generators :as gen]
+            [simple-sheck.properties :as prop]
+            [simple-sheck.clojure-test :as ct :refer (defspec)]))
 
 (defspec trial-counts 5000
   (prop/for-all* [gen/int] (constantly true)))
@@ -41,7 +41,7 @@
   (let [[report-counters stdout]
         (binding [ct/*report-shrinking* true
                   ; need to keep the failure of failing-spec from affecting the
-                  ; simple-check test run
+                  ; simple-sheck test run
                   *report-counters* (ref *initial-report-counters*)]
           [*report-counters*
            (with-out-str (binding [*test-out* *out*] (test-var #'failing-spec)))])]

@@ -1,4 +1,4 @@
-(ns simple-check.generators
+(ns simple-sheck.generators
   (:import java.util.Random)
   (:refer-clojure :exclude [int vector list map keyword
                             char boolean byte bytes]))

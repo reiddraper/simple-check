@@ -1,9 +1,9 @@
-(ns simple-check.core-test
+(ns simple-sheck.core-test
   (:use clojure.test)
-  (:require [simple-check.core       :as sc]
-            [simple-check.generators :as gen]
-            [simple-check.properties :as prop]
-            [simple-check.clojure-test :as ct :refer (defspec)]))
+  (:require [simple-sheck.core       :as sc]
+            [simple-sheck.generators :as gen]
+            [simple-sheck.properties :as prop]
+            [simple-sheck.clojure-test :as ct :refer (defspec)]))
 
 ;; plus and 0 form a monoid
 ;; ---------------------------------------------------------------------------
@@ -18,7 +18,7 @@
   (testing "+ and 0 form a monoid"
            (is (let [p (prop/for-all* [gen/int gen/int gen/int] passes-monoid-properties)]
                  (:result
-                   (sc/quick-check 1000 p))))))
+                   (sc/quick-sheck 1000 p))))))
 
 ;; reverse
 ;; ---------------------------------------------------------------------------
@@ -32,7 +32,7 @@
 (deftest reverse-equal?
   (testing "For all vectors L, reverse(reverse(L)) == L"
            (is (let [p (prop/for-all* [(gen/vector gen/int)] reverse-equal?-helper)]
-                 (:result (sc/quick-check 1000 p))))))
+                 (:result (sc/quick-sheck 1000 p))))))
 
 ;; failing reverse
 ;; ---------------------------------------------------------------------------
@@ -41,7 +41,7 @@
   (testing "For all vectors L, L == reverse(L). Not true"
            (is (false?
                  (let [p (prop/for-all* [(gen/vector gen/int)] #(= (reverse %) %))]
-                   (:result (sc/quick-check 1000 p)))))))
+                   (:result (sc/quick-sheck 1000 p)))))))
 
 ;; failing element remove
 ;; ---------------------------------------------------------------------------
@@ -55,7 +55,7 @@
            longer be in the list. (This is a false assumption)"
            (is (false?
                  (let [p (prop/for-all* [(gen/vector gen/int)] first-is-gone)]
-                   (:result (sc/quick-check 1000 p)))))))
+                   (:result (sc/quick-sheck 1000 p)))))))
 
 ;; exceptions shrink and return as result
 ;; ---------------------------------------------------------------------------
@@ -71,7 +71,7 @@
            as they continue to throw."
            (is (= [exception [0]]
                   (let [result
-                        (sc/quick-check
+                        (sc/quick-sheck
                           1000 (prop/for-all* [gen/int] exception-thrower))]
                     [(:result result) (get-in result [:shrunk :smallest])])))))
 
@@ -115,7 +115,7 @@
 (defn list-vector-round-trip-equiv
   [a]
   ;; NOTE: can't use `(into '() ...)` here because that
-  ;; puts the list in reverse order. simple-check found that bug
+  ;; puts the list in reverse order. simple-sheck found that bug
   ;; pretty quickly...
   (= a (apply list (vec a))))
 
@@ -123,7 +123,7 @@
   (testing
     ""
     (is (:result
-          (sc/quick-check
+          (sc/quick-sheck
             1000 (prop/for-all*
                    [(gen/list gen/int)] list-vector-round-trip-equiv))))))
 
@@ -157,7 +157,7 @@
 (deftest boolean-and
   (testing
     "`and` with false and anything else should be false"
-    (is (:result (sc/quick-check
+    (is (:result (sc/quick-sheck
                    1000 (prop/for-all*
                           [gen/boolean] #(not (and % false))))))))
 
@@ -172,7 +172,7 @@
   (testing
     "For all vectors V, sorted(V) should have the elements in order"
     (is (:result
-          (sc/quick-check
+          (sc/quick-sheck
             1000
             (prop/for-all*
               [(gen/vector gen/int)] elements-are-in-order-after-sorting))))))
@@ -195,7 +195,7 @@
 
 (defn unique-test
   [seed]
-  (sc/quick-check 1000
+  (sc/quick-sheck 1000
                   (prop/for-all*
                     [(gen/vector gen/int)] vector-elements-are-unique)
                   :seed seed))
@@ -208,4 +208,4 @@
   (testing "If two runs are started with the same seed, they should
            return the same results."
            (is (:result
-                 (sc/quick-check 1000 (prop/for-all* [gen/int] equiv-runs))))))
+                 (sc/quick-sheck 1000 (prop/for-all* [gen/int] equiv-runs))))))
