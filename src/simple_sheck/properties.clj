@@ -1,5 +1,5 @@
-(ns simple-check.properties
-  (:require [simple-check.generators :as gen]))
+(ns simple-sheck.properties
+  (:require [simple-sheck.generators :as gen]))
 
 ;; NOTES:
 ;; The fields that should be returned from each test

@@ -1,6 +1,6 @@
-(ns simple-check.core
-  (:require [simple-check.generators :as gen]
-            [simple-check.clojure-test :as ct]))
+(ns simple-sheck.core
+  (:require [simple-sheck.generators :as gen]
+            [simple-sheck.clojure-test :as ct]))
 
 ;; TODO: this isn't used now, but might be useful
 ;; once we allow for overriding shrinking
@@ -30,13 +30,13 @@
   (ct/report-trial property num-trials num-trials)
   {:result true :num-tests num-trials :seed seed})
 
-(defn quick-check
+(defn quick-sheck
   "Tests `property` `num-tests` times.
 
   Examples:
 
     (def p (for-all [a gen/pos-int] (> (* a a) a)))
-    (quick-check 100 p)
+    (quick-sheck 100 p)
   "
   [num-tests property & {:keys [seed max-size] :or {max-size 200}}]
   (let [[created-seed rng] (make-rng seed)
