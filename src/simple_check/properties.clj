@@ -22,7 +22,6 @@
     {:gen (fn [random-seed size]
       (let [result (try (apply function args) (catch Throwable t t))]
         {:result result
-         :shrink gen/shrink
          :function function
          :args args}))}))
 
