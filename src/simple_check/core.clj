@@ -2,9 +2,7 @@
   (:require [simple-check.generators :as gen]
             [simple-check.clojure-test :as ct]))
 
-;; TODO: this isn't used now, but might be useful
-;; once we allow for overriding shrinking
-(defn shrinks
+(defn shrink-fun
   [{shrink-fn :shrink} value]
   (if shrink-fn
     (shrink-fn value)
@@ -86,8 +84,8 @@
   * If a node fails the property, search it's children
   The value returned is the left-most failing example at the depth where a
   passing example was found."
-  [prop failing]
-  (let [shrinks-this-depth (gen/shrink failing)]
+  [prop failing shrink-fun]
+  (let [shrinks-this-depth (shrink-fun failing)]
     (loop [nodes shrinks-this-depth
            f failing
            total-nodes-visited 0
@@ -104,7 +102,7 @@
             ;; if so, traverse down them. If not, save this as the best example
             ;; seen now and then look at the right-siblings
             ;; children
-            (let [children (gen/shrink head)]
+            (let [children (shrink-fun head)]
               (if (empty? children)
                 (recur tail head (inc total-nodes-visited) depth false)
                 (recur children head (inc total-nodes-visited) (inc depth) true)))))))))
@@ -116,5 +114,5 @@
    :failing-size size
    :num-tests trial-number
    :fail (vec failing-params)
-   :shrunk (shrink-loop property-fun failing-params)})
+   :shrunk (shrink-loop property-fun failing-params gen/shrink)})
 

@@ -19,12 +19,12 @@
 (defn- apply-gen
   [function]
   (fn [args]
-    [:gen (fn [random-seed size]
+    {:gen (fn [random-seed size]
       (let [result (try (apply function args) (catch Throwable t t))]
         {:result result
          :shrink gen/shrink
          :function function
-         :args args}))]))
+         :args args}))}))
 
 (defn for-all*
   "Creates a property (properties are also generators). A property
