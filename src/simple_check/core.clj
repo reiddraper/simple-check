@@ -48,11 +48,11 @@
               result (:result result-map)
               args (:args result-map)]
           (cond
-            (instance? Throwable result) (failure property (:function result-map) result so-far size args)
+            (instance? Throwable result) (failure property (:function result-map) result so-far size args gen/shrink)
             result (do
                      (ct/report-trial property so-far num-tests)
                      (recur (inc so-far) rest-size-seq))
-            :default (failure property (:function result-map) result so-far size args)))))))
+            :default (failure property (:function result-map) result so-far size args gen/shrink)))))))
 
 (defmacro forall [bindings expr]
   `(let [~@bindings]
@@ -108,11 +108,11 @@
                 (recur children head (inc total-nodes-visited) (inc depth) true)))))))))
 
 (defn- failure
-  [property property-fun result trial-number size failing-params]
+  [property property-fun result trial-number size failing-params shrink-fun]
   (ct/report-failure property result trial-number failing-params)
   {:result result
    :failing-size size
    :num-tests trial-number
    :fail (vec failing-params)
-   :shrunk (shrink-loop property-fun failing-params gen/shrink)})
+   :shrunk (shrink-loop property-fun failing-params shrink-fun)})
 
