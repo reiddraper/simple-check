@@ -15,6 +15,10 @@
   [{generator-fn :gen} rand-seed size]
   (generator-fn rand-seed size))
 
+(defn make-gen
+  [generator-fn]
+  {:gen generator-fn})
+
 (defn make-size-range-seq
   [max-size]
   (cycle (range 1 max-size)))
@@ -49,8 +53,9 @@
   "Create a new generator that calls `f` on the generated value before
   returning it."
   [f gen]
-  {:gen (fn [rand-seed size]
-          (f (call-gen gen rand-seed size)))})
+  (make-gen
+    (fn [rand-seed size]
+          (f (call-gen gen rand-seed size)))))
 
 (defn bind
   "Create a new generator that passes the result of `gen` into function
@@ -69,14 +74,15 @@
   of bind (`>>=`) for the generator monad.
   "
   [gen k]
-  {:gen (fn [rand-seed size]
-          (let [value (call-gen gen rand-seed size)]
-            (call-gen (k value) rand-seed size)))})
+  (make-gen
+    (fn [rand-seed size]
+      (let [value (call-gen gen rand-seed size)]
+        (call-gen (k value) rand-seed size)))))
 
 (defn return
   "Create a generator that always returns `val`"
   [val]
-  {:gen (fn [rand-seed size] val)})
+  (make-gen (fn [rand-seed size] val)))
 
 ;; Combinators
 ;; ---------------------------------------------------------------------------
@@ -86,10 +92,11 @@
   `min-range` to `max-range`."
   [min-range max-range]
   (let [diff (Math/abs (long (- max-range min-range)))]
-    {:gen (fn [^Random rand-seed _size]
-            (if (zero? diff)
-              min-range
-              (+ (.nextInt rand-seed (inc diff)) min-range)))}))
+    (make-gen
+      (fn [^Random rand-seed _size]
+        (if (zero? diff)
+          min-range
+          (+ (.nextInt rand-seed (inc diff)) min-range))))))
 
 
 (defn one-of
@@ -150,11 +157,12 @@
       (such-that not-empty (gen/vector gen/int))
   "
   [f gen]
-  {:gen (fn [rand-seed size]
-    (let [value (call-gen gen rand-seed size)]
-      (if (f value)
-        value
-        (recur rand-seed size))))})
+  (make-gen
+    (fn [rand-seed size]
+      (let [value (call-gen gen rand-seed size)]
+        (if (f value)
+          value
+          (recur rand-seed size))))))
 
 ;; Generic generators and helpers
 ;; ---------------------------------------------------------------------------
@@ -168,9 +176,10 @@
       (pair gen/int gen/int)
   "
   [a b]
-  {:gen (fn [rand-seed size]
-    [(call-gen a rand-seed size)
-     (call-gen b rand-seed size)])})
+  (make-gen
+    (fn [rand-seed size]
+      [(call-gen a rand-seed size)
+       (call-gen b rand-seed size)])))
 
 (defn shrink-index
   [coll index]
@@ -214,7 +223,7 @@
 (def int
   "Generates a positive or negative integer bounded by the generator's
   `size` parameter."
-  {:gen int-gen})
+  (make-gen int-gen))
 
 (def pos-int
   "Generate positive integers bounded by the generator's `size` parameter."
@@ -257,8 +266,10 @@
       ;; =>  [3 true] [-4 false] [9 true]))
   "
   [& generators]
-  {:gen (fn [rand-seed size]
-    (apply clj-tuple/tuple (clojure.core/map #(call-gen % rand-seed size) generators)))})
+  (make-gen
+    (fn [rand-seed size]
+      (apply clj-tuple/tuple (clojure.core/map #(call-gen % rand-seed size)
+                                               generators)))))
 
 (defn shrink-tuple
   [value]
@@ -279,18 +290,21 @@
   "Create a generator whose elements are chosen from `gen`. The count of the
   vector will be bounded by the `size` generator parameter."
   ([gen]
-   {:gen (fn [rand-seed size]
-     (let [num-elements (Math/abs (long (call-gen int rand-seed size)))]
-       (vec (repeatedly num-elements #(call-gen gen rand-seed size)))))})
+   (make-gen
+     (fn [rand-seed size]
+       (let [num-elements (Math/abs (long (call-gen int rand-seed size)))]
+         (vec (repeatedly num-elements #(call-gen gen rand-seed size)))))))
   ([gen num-elements]
-   {:gen (fn [rand-seed size]
-     (vec (repeatedly num-elements #(call-gen gen rand-seed size))))})
+   (make-gen
+     (fn [rand-seed size]
+       (vec (repeatedly num-elements #(call-gen gen rand-seed size))))))
   ([gen min-elements max-elements]
-   {:gen (fn [rand-seed size]
-     (let [max-translated (- max-elements min-elements)
-           num-translated (long (call-gen pos-int rand-seed max-translated))
-           num-elements (+ min-elements num-translated)]
-       (vec (repeatedly num-elements #(call-gen gen rand-seed size)))))}))
+   (make-gen
+     (fn [rand-seed size]
+       (let [max-translated (- max-elements min-elements)
+             num-translated (long (call-gen pos-int rand-seed max-translated))
+             num-elements (+ min-elements num-translated)]
+         (vec (repeatedly num-elements #(call-gen gen rand-seed size))))))))
 
 (extend clojure.lang.IPersistentVector
   Shrink
@@ -304,9 +318,10 @@
 (defn list
   "Like `vector`, but generators lists."
   [gen]
-  {:gen (fn [rand-seed size]
-    (let [num-elements (Math/abs (long (call-gen int rand-seed size)))]
-      (into '() (repeatedly num-elements #(call-gen gen rand-seed size)))))})
+  (make-gen
+    (fn [rand-seed size]
+      (let [num-elements (Math/abs (long (call-gen int rand-seed size)))]
+        (into '() (repeatedly num-elements #(call-gen gen rand-seed size)))))))
 
 (defn shrink-list
   [l]
@@ -354,10 +369,11 @@
   "Create a generator that generates maps, with keys chosen from
   `ken-gen` and values chosen from `val-gen`."
   [key-gen val-gen]
-  {:gen (fn [rand-seed size]
-    (let [map-size (call-gen (choose 0 size) rand-seed size)
-          p (pair key-gen val-gen)]
-      (into {} (repeatedly map-size #(call-gen p rand-seed size)))))})
+  (make-gen
+    (fn [rand-seed size]
+      (let [map-size (call-gen (choose 0 size) rand-seed size)
+            p (pair key-gen val-gen)]
+        (into {} (repeatedly map-size #(call-gen p rand-seed size)))))))
 
 (defn shrink-map
   [value]
@@ -426,7 +442,7 @@
 
 (def string
   "Generate strings."
-  {:gen string-gen})
+  (make-gen string-gen))
 
 (defn string-ascii-gen
   [rand-seed size]
@@ -434,7 +450,7 @@
 
 (def string-ascii
   "Generate ascii strings."
-  {:gen string-ascii-gen})
+  (make-gen string-ascii-gen))
 
 (defn string-alpha-numeric-gen
   [rand-seed size]
@@ -442,7 +458,7 @@
 
 (def string-alpha-numeric
   "Generate alpha-numeric strings."
-  {:gen string-alpha-numeric-gen})
+  (make-gen string-alpha-numeric-gen))
 
 (defn shrink-string
   [s]
