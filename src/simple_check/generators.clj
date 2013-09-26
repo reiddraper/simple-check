@@ -4,6 +4,8 @@
   (:refer-clojure :exclude [int vector list map keyword
                             char boolean byte bytes]))
 
+(declare shrink)
+
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
@@ -16,8 +18,12 @@
   (generator-fn rand-seed size))
 
 (defn make-gen
-  [generator-fn]
-  {:gen generator-fn})
+  ([generator-fn]
+  {:gen generator-fn
+   :shrink shrink})
+  ([generator-fn shrink-fn]
+   {:gen generator-fn
+    :shrink shrink-fn}))
 
 (defn make-size-range-seq
   [max-size]
@@ -55,7 +61,8 @@
   [f gen]
   (make-gen
     (fn [rand-seed size]
-          (f (call-gen gen rand-seed size)))))
+          (f (call-gen gen rand-seed size)))
+    (:shrink gen)))
 
 (defn bind
   "Create a new generator that passes the result of `gen` into function
@@ -77,12 +84,15 @@
   (make-gen
     (fn [rand-seed size]
       (let [value (call-gen gen rand-seed size)]
-        (call-gen (k value) rand-seed size)))))
+        (call-gen (k value) rand-seed size)))
+    (:shrink gen)))
 
 (defn return
   "Create a generator that always returns `val`"
   [val]
-  (make-gen (fn [rand-seed size] val)))
+  (make-gen
+    (fn [rand-seed size] val)
+    (constantly [])))
 
 ;; Combinators
 ;; ---------------------------------------------------------------------------
@@ -162,12 +172,14 @@
       (let [value (call-gen gen rand-seed size)]
         (if (f value)
           value
-          (recur rand-seed size))))))
+          (recur rand-seed size))))
+    (fn [value]
+      (filter f ((:shrink gen) value)))))
 
 ;; Generic generators and helpers
 ;; ---------------------------------------------------------------------------
 
-(defn pair
+(def pair
   "Create a generator that generates two-vectors that generate a value
   from `a` and `b`.
 
@@ -175,15 +187,12 @@
 
       (pair gen/int gen/int)
   "
-  [a b]
-  (make-gen
-    (fn [rand-seed size]
-      [(call-gen a rand-seed size)
-       (call-gen b rand-seed size)])))
+  clj-tuple/tuple)
 
 (defn shrink-index
-  [coll index]
-  (clojure.core/map (partial assoc coll index) (shrink (nth coll index))))
+  [coll shrink-funs index]
+  (clojure.core/map (partial assoc coll index) ((nth shrink-funs index)
+                                                  (nth coll index))))
 
 (defn shrink-seq
   [coll]
@@ -254,6 +263,13 @@
 ;; Tuple
 ;; ---------------------------------------------------------------------------
 
+(defn shrink-tuple-maker
+  [shrink-funs]
+  (fn [value]
+    (clojure.core/map (partial apply clj-tuple/tuple)
+                      (mapcat (partial shrink-index (vec value) shrink-funs)
+                              (range (count value))))))
+
 (defn tuple
   "Create a generator that returns a vector, whose elements are chosen
   from the generators in the same position.
@@ -268,20 +284,21 @@
   [& generators]
   (make-gen
     (fn [rand-seed size]
-      (apply clj-tuple/tuple (clojure.core/map #(call-gen % rand-seed size)
-                                               generators)))))
+      (apply clj-tuple/tuple
+             (clojure.core/map
+               #(call-gen % rand-seed size) generators)))
+    (shrink-tuple-maker (vec (clojure.core/map :shrink generators)))))
 
-(defn shrink-tuple
-  [value]
-  (clojure.core/map (partial apply clj-tuple/tuple)
-    (mapcat (partial shrink-index (vec value)) (range (count value)))))
+(defn make-shrink
+  [num-times]
+  (vec (repeat num-times shrink)))
 
-(extend clj_tuple.Tuple1 Shrink {:shrink shrink-tuple})
-(extend clj_tuple.Tuple2 Shrink {:shrink shrink-tuple})
-(extend clj_tuple.Tuple3 Shrink {:shrink shrink-tuple})
-(extend clj_tuple.Tuple4 Shrink {:shrink shrink-tuple})
-(extend clj_tuple.Tuple5 Shrink {:shrink shrink-tuple})
-(extend clj_tuple.Tuple6 Shrink {:shrink shrink-tuple})
+(extend clj_tuple.Tuple1 Shrink {:shrink (shrink-tuple-maker (make-shrink 1))})
+(extend clj_tuple.Tuple2 Shrink {:shrink (shrink-tuple-maker (make-shrink 2))})
+(extend clj_tuple.Tuple3 Shrink {:shrink (shrink-tuple-maker (make-shrink 3))})
+(extend clj_tuple.Tuple4 Shrink {:shrink (shrink-tuple-maker (make-shrink 4))})
+(extend clj_tuple.Tuple5 Shrink {:shrink (shrink-tuple-maker (make-shrink 5))})
+(extend clj_tuple.Tuple6 Shrink {:shrink (shrink-tuple-maker (make-shrink 6))})
 
 ;; Vector
 ;; ---------------------------------------------------------------------------

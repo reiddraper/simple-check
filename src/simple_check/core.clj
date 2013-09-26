@@ -48,11 +48,19 @@
               result (:result result-map)
               args (:args result-map)]
           (cond
-            (instance? Throwable result) (failure property (:function result-map) result so-far size args gen/shrink)
+            (instance? Throwable result) (failure
+                                           property
+                                           (:function result-map)
+                                           result so-far size args
+                                           (:shrink property))
             result (do
                      (ct/report-trial property so-far num-tests)
                      (recur (inc so-far) rest-size-seq))
-            :default (failure property (:function result-map) result so-far size args gen/shrink)))))))
+            :default (failure
+                       property
+                       (:function result-map)
+                       result so-far size args
+                       (:shrink property))))))))
 
 (defmacro forall [bindings expr]
   `(let [~@bindings]
