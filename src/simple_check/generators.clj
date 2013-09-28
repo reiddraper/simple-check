@@ -32,12 +32,18 @@
   [m k]
   (join-rose (rose-fmap k m)))
 
+(defn rose-filter
+  "Takes a list of roses, not a rose"
+  [pred [root children]]
+  [root (clojure.core/map (partial rose-filter pred)
+                          (clojure.core/filter (comp pred rose-root) children))])
+
 ;; Gen
 ;; ---------------------------------------------------------------------------
 
 (defn make-gen
   ([generator-fn]
-  {:gen generator-fn}))
+   {:gen generator-fn}))
 
 (defn gen-pure
   [value]
@@ -49,7 +55,7 @@
   [k {h :gen}]
   (make-gen
     (fn [rnd size]
-          (k (h rnd size)))))
+      (k (h rnd size)))))
 
 (defn gen-bind
   [{h :gen} k]
@@ -114,6 +120,12 @@
       lower
       (+ (.nextInt rnd (inc diff)) lower))))
 
+(defn resize
+  [n {gen :gen}]
+  (make-gen
+    (fn [rnd _size]
+      (gen rnd n))))
+
 (defn choose
   "Create a generator that returns numbers in the range
   `min-range` to `max-range`."
@@ -145,3 +157,12 @@
   [coll]
   (gen-bind (choose 0 (dec (count coll)))
             #(gen-pure (rose-fmap (partial nth coll) %))))
+
+(defn such-that
+  [pred gen]
+  (make-gen
+    (fn [rand-seed size]
+      (let [value (call-gen gen rand-seed size)]
+        (if (pred (rose-root value))
+          (rose-filter pred value)
+          (recur rand-seed (+ 1 size)))))))
