@@ -122,3 +122,8 @@
     (fn [^Random rnd _size]
       (let [value (rand-range rnd lower upper)]
         [value (clojure.core/map int-rose-tree (shrink-int value))]))))
+
+(defn one-of
+  [generators]
+  (gen-bind (choose 0 (dec (count generators)))
+            #(nth generators (rose-root %))))
