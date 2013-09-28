@@ -14,15 +14,15 @@
                       (fn [xs]
                         (bind-fun elem
                                   (fn [y]
-                                    (return-fun (conj y xs)))))))
-          (return-fun '())
-          (reverse ms)))
+                                    (return-fun (conj xs y)))))))
+          (return-fun [])
+          ms))
 
-(defn lift
-  [bind-fun return-fun f & ms]
-  (bind-fun (sequence bind-fun return-fun ms)
-            (fn [args]
-              (return-fun (rose-pure (apply f args))))))
+;;(defn lift
+;;  [bind-fun return-fun f & ms]
+;;  (bind-fun (sequence bind-fun return-fun ms)
+;;            (fn [args]
+;;              (return-fun (rose-pure (apply f args))))))
 
 ;; RoseTree
 ;; ---------------------------------------------------------------------------
@@ -57,14 +57,21 @@
   [root (clojure.core/map (partial rose-filter pred)
                           (clojure.core/filter (comp pred rose-root) children))])
 
+(defn rose-permutations
+  "Create a seq of vectors, where each rose in turn, has been replaced
+  by its children."
+  [roses]
+  (apply concat
+         (for [[rose index]
+          (clojure.core/map clojure.core/vector roses (range))]
+           (for [child (rose-children rose)] (assoc roses index child)))))
+
 (defn zip-rose
-  [f [a-root a-children :as a] [b-root b-children :as b]]
+  [f roses]
   "Combine two Rose trees with binary function f"
-  [(f a-root b-root)
-   (clojure.core/map (partial apply zip-rose f)
-                     (concat
-                       (for [b-child b-children] [a b-child])
-                       (for [a-child a-children] [b a-child])))])
+  [(apply f (clojure.core/map rose-root roses))
+   (clojure.core/map (partial zip-rose f)
+                     (rose-permutations roses))])
 
 ;; Gen
 ;; ---------------------------------------------------------------------------
@@ -148,6 +155,13 @@
       lower
       (+ (.nextInt rnd (inc diff)) lower))))
 
+(defn sized
+  [sized-gen]
+  (make-gen
+    (fn [rnd size]
+      (let [sized-gen (sized-gen size)]
+        (call-gen sized-gen rnd size)))))
+
 (defn resize
   [n {gen :gen}]
   (make-gen
@@ -194,3 +208,26 @@
         (if (pred (rose-root value))
           (rose-filter pred value)
           (recur rand-seed (+ 1 size)))))))
+
+(defn tuple
+  [& generators]
+  (gen-bind (sequence gen-bind gen-pure generators)
+            (fn [roses]
+              (gen-pure (zip-rose clojure.core/vector roses)))))
+
+(def int
+  "Really returns a long"
+  (sized (fn [size] (choose (- size) size))))
+
+(def nat
+  (fmap #(Math/abs (long %)) int))
+
+(def pos-int nat)
+
+(def neg-int (fmap (partial * -1) nat))
+
+(def s-pos-int
+  (fmap inc nat))
+
+(def s-neg-int
+  (fmap dec neg-int))
