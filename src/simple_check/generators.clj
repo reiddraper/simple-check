@@ -4,7 +4,64 @@
   (:refer-clojure :exclude [int vector list map keyword
                             char boolean byte bytes]))
 
-(declare shrink)
+
+;; RoseTree
+;; ---------------------------------------------------------------------------
+
+(defn join-rose
+  [[[inner-root inner-children] children]]
+  [inner-root (clojure.core/map join-rose (concat children inner-children))])
+
+(defn rose-root
+  [[root _children]]
+  root)
+
+(defn rose-children
+  [[_root children]]
+  children)
+
+(defn rose-pure
+  [x]
+  [x []])
+
+(defn rose-fmap
+  [f [root children]]
+  [(f root) (clojure.core/map (partial rose-fmap f) children)])
+
+(defn rose-bind
+  [m k]
+  (join-rose (rose-fmap k m)))
+
+;; Gen
+;; ---------------------------------------------------------------------------
+
+(defn make-gen
+  ([generator-fn]
+  {:gen generator-fn}))
+
+(defn gen-pure
+  [value]
+  (make-gen
+    (fn [rnd size]
+      value)))
+
+(defn gen-fmap
+  [k {h :gen}]
+  (make-gen
+    (fn [rnd size]
+          (k (h rnd size)))))
+
+(defn gen-bind
+  [{h :gen} k]
+  (make-gen
+    (fn [rnd size]
+      (let [inner (h rnd size)
+            {result :gen} (k inner)]
+        (result rnd size)))))
+
+(defn fmap
+  [f gen]
+  (gen-fmap (partial rose-fmap f) gen))
 
 ;; Helpers
 ;; ---------------------------------------------------------------------------
@@ -14,16 +71,8 @@
   ([seed] (Random. seed)))
 
 (defn call-gen
-  [{generator-fn :gen} rand-seed size]
-  (generator-fn rand-seed size))
-
-(defn make-gen
-  ([generator-fn]
-  {:gen generator-fn
-   :shrink shrink})
-  ([generator-fn shrink-fn]
-   {:gen generator-fn
-    :shrink shrink-fn}))
+  [{generator-fn :gen} rnd size]
+  (generator-fn rnd size))
 
 (defn make-size-range-seq
   [max-size]
@@ -34,492 +83,42 @@
   ([generator max-size]
    (let [r (random)
          size-seq (make-size-range-seq max-size)]
-     (clojure.core/map (partial call-gen generator r) size-seq))))
+     (clojure.core/map (comp rose-root (partial call-gen generator r)) size-seq))))
 
 (defn sample
-  "Return a sequence of `num-samples` (default 10)
-  realized values from `generator`."
   ([generator]
    (sample generator 10))
   ([generator num-samples]
    (take num-samples (sample-seq generator))))
 
-;; Shrink protocol, Functor and Monad implementations
+
+;; Combinators and helpers
 ;; ---------------------------------------------------------------------------
-
-(defprotocol Shrink
-  "The Shrink protocol exists for dispatching the shrink function
-  based on type."
-  (shrink [this]
-          "Return a (possibly empty) sequence of smaller values.
-          Care must be given to not create any loops if shrink is called
-          recursively on the sequence."))
-
-(defn fmap
-  "Create a new generator that calls `f` on the generated value before
-  returning it."
-  [f gen]
-  (make-gen
-    (fn [rand-seed size]
-          (f (call-gen gen rand-seed size)))
-    (:shrink gen)))
-
-(defn bind
-  "Create a new generator that passes the result of `gen` into function
-  `k`. `k` should return a new generator. This allows you to create new
-  generators that depend on the value of other generators. For example,
-  to create a generator which first generates a vector of integers, and
-  then chooses a random element from that vector:
-
-      (gen/bind (gen/such-that not-empty (gen/vector gen/int))
-                ;; this function takes a realized vector,
-                ;; and then returns a new generator which
-                ;; chooses a random element from it
-                gen/elements)
-
-  This is equivalent to Haskell QuickCheck's implementation
-  of bind (`>>=`) for the generator monad.
-  "
-  [gen k]
-  (make-gen
-    (fn [rand-seed size]
-      (let [value (call-gen gen rand-seed size)]
-        (call-gen (k value) rand-seed size)))
-    (:shrink gen)))
-
-(defn return
-  "Create a generator that always returns `val`"
-  [val]
-  (make-gen
-    (fn [rand-seed size] val)
-    (constantly [])))
-
-;; Combinators
-;; ---------------------------------------------------------------------------
-
-(defn choose
-  "Create a generator that returns numbers in the range
-  `min-range` to `max-range`."
-  [min-range max-range]
-  (let [diff (Math/abs (long (- max-range min-range)))]
-    (make-gen
-      (fn [^Random rand-seed _size]
-        (if (zero? diff)
-          min-range
-          (+ (.nextInt rand-seed (inc diff)) min-range))))))
-
-
-(defn one-of
-  "Create a generator that randomly chooses a value from the list of
-  provided generators.
-
-  Examples:
-
-      (one-of [gen/int gen/boolean (gen/vector gen/int)])
-
-  "
-  [generators]
-  (bind (choose 0 (dec (count generators)))
-        #(nth generators %)))
-
-(defn- pick
-  [[h & tail] n]
-  (let [[chance gen] h]
-    (if (<= n chance)
-      gen
-      (recur tail (- n chance)))))
-
-(defn frequency
-  "Create a generator that chooses a generator from `pairs` based on the
-  provided likelihoods. The likelihood of a given generator being chosen is
-  its likelihood divided by the sum of all likelihoods
-
-  Examples:
-
-      (gen/frequency [[5 gen/int] [3 (gen/vector gen/int)] [2 gen/boolean]])
-  "
-  [pairs]
-  (let [total (apply + (clojure.core/map first pairs))]
-    (bind (choose 1 total)
-          (partial pick pairs))))
-
-(defn elements
-  "Create a generator that randomly chooses an element from `coll`.
-
-  Examples:
-
-      (gen/elements [:foo :bar :baz])
-  "
-  [coll]
-  (fmap #(nth coll %)
-        (choose 0 (dec (count coll)))))
-
-(defn such-that
-  "Create a generator that generates values from `gen` that satisfy predicate
-  `f`. Care is needed to ensure there is a high chance `gen` will satisfy `f`,
-  otherwise it will keep trying forever. Eventually we will add another
-  generator combinator that only tries N times before giving up. In the Haskell
-  version this is called `suchThatMaybe`.
-
-  Examples:
-
-      ;; generate non-empty vectors of integers
-      (such-that not-empty (gen/vector gen/int))
-  "
-  [f gen]
-  (make-gen
-    (fn [rand-seed size]
-      (let [value (call-gen gen rand-seed size)]
-        (if (f value)
-          value
-          (recur rand-seed size))))
-    (fn [value]
-      (filter f ((:shrink gen) value)))))
-
-;; Generic generators and helpers
-;; ---------------------------------------------------------------------------
-
-(def pair
-  "Create a generator that generates two-vectors that generate a value
-  from `a` and `b`.
-
-  Examples:
-
-      (pair gen/int gen/int)
-  "
-  clj-tuple/tuple)
-
-(defn shrink-index
-  [coll shrink-funs index]
-  (clojure.core/map (partial assoc coll index) ((nth shrink-funs index)
-                                                  (nth coll index))))
-
-(defn shrink-seq
-  [coll]
-  (if (empty? coll)
-    coll
-    (let [head (first coll)
-          tail (rest coll)]
-      (concat [tail]
-              (for [x (shrink-seq tail)] (cons head x))
-              (for [y (shrink head)] (cons y tail))))))
 
 (defn halfs
   [n]
   (take-while (partial not= 0) (iterate #(quot % 2) n)))
 
-;; Boolean
-;; ---------------------------------------------------------------------------
-
-(def boolean (elements [true false]))
-
-(defn shrink-boolean
-  [b]
-  (if b [false] []))
-
-(extend java.lang.Boolean
-  Shrink
-  {:shrink shrink-boolean})
-
-;; Number
-;; ---------------------------------------------------------------------------
-
-(defn int-gen
-  ([rand-seed size]
-   (call-gen (choose (- size) size)
-      rand-seed size)))
-
-(def int
-  "Generates a positive or negative integer bounded by the generator's
-  `size` parameter."
-  (make-gen int-gen))
-
-(def pos-int
-  "Generate positive integers bounded by the generator's `size` parameter."
-  (fmap #(Math/abs (long %)) int))
-(def neg-int
-  "Generate negative integers bounded by the generator's `size` parameter."
-  (fmap (partial * -1) pos-int))
-
-(def s-pos-int
-  "Generate strictly positive integers bounded by the generator's `size`
-   parameter."
-  (fmap inc pos-int))
-(def s-neg-int
-  "Generate strictly negative integers bounded by the generator's `size`
-   parameter."
-  (fmap (partial * -1) s-pos-int))
-
 (defn shrink-int
   [integer]
   (clojure.core/map (partial - integer) (halfs integer)))
 
-(extend java.lang.Number
-  Shrink
-  ;; TODO:
-  ;; this shrink goes into an infinite loop with floats
-  {:shrink shrink-int})
-
-;; Tuple
-;; ---------------------------------------------------------------------------
-
-(defn shrink-tuple-maker
-  [shrink-funs]
-  (fn [value]
-    (clojure.core/map (partial apply clj-tuple/tuple)
-                      (mapcat (partial shrink-index (vec value) shrink-funs)
-                              (range (count value))))))
-
-(defn tuple
-  "Create a generator that returns a vector, whose elements are chosen
-  from the generators in the same position.
-
-  Examples:
-
-      (def t (tuple gen/int gen/boolean))
-      (sample t)
-      ;; => ([1 true] [2 true] [2 false] [1 false] [0 true] [-2 false] [-6 false]
-      ;; =>  [3 true] [-4 false] [9 true]))
-  "
-  [& generators]
-  (make-gen
-    (fn [rand-seed size]
-      (apply clj-tuple/tuple
-             (clojure.core/map
-               #(call-gen % rand-seed size) generators)))
-    (shrink-tuple-maker (vec (clojure.core/map :shrink generators)))))
-
-(defn make-shrink
-  [num-times]
-  (vec (repeat num-times shrink)))
-
-(extend clj_tuple.Tuple1 Shrink {:shrink (shrink-tuple-maker (make-shrink 1))})
-(extend clj_tuple.Tuple2 Shrink {:shrink (shrink-tuple-maker (make-shrink 2))})
-(extend clj_tuple.Tuple3 Shrink {:shrink (shrink-tuple-maker (make-shrink 3))})
-(extend clj_tuple.Tuple4 Shrink {:shrink (shrink-tuple-maker (make-shrink 4))})
-(extend clj_tuple.Tuple5 Shrink {:shrink (shrink-tuple-maker (make-shrink 5))})
-(extend clj_tuple.Tuple6 Shrink {:shrink (shrink-tuple-maker (make-shrink 6))})
-
-;; Vector
-;; ---------------------------------------------------------------------------
-
-(defn vector
-  "Create a generator whose elements are chosen from `gen`. The count of the
-  vector will be bounded by the `size` generator parameter."
-  ([gen]
-   (make-gen
-     (fn [rand-seed size]
-       (let [num-elements (Math/abs (long (call-gen int rand-seed size)))]
-         (vec (repeatedly num-elements #(call-gen gen rand-seed size)))))))
-  ([gen num-elements]
-   (make-gen
-     (fn [rand-seed size]
-       (vec (repeatedly num-elements #(call-gen gen rand-seed size))))))
-  ([gen min-elements max-elements]
-   (make-gen
-     (fn [rand-seed size]
-       (let [max-translated (- max-elements min-elements)
-             num-translated (long (call-gen pos-int rand-seed max-translated))
-             num-elements (+ min-elements num-translated)]
-         (vec (repeatedly num-elements #(call-gen gen rand-seed size))))))))
-
-(extend clojure.lang.IPersistentVector
-  Shrink
-  ;; TODO:
-  ;; this shrink goes into an infinite loop with floats
-  {:shrink (comp (partial clojure.core/map vec) shrink-seq)})
-
-;; List
-;; ---------------------------------------------------------------------------
-
-(defn list
-  "Like `vector`, but generators lists."
-  [gen]
-  (make-gen
-    (fn [rand-seed size]
-      (let [num-elements (Math/abs (long (call-gen int rand-seed size)))]
-        (into '() (repeatedly num-elements #(call-gen gen rand-seed size)))))))
-
-(defn shrink-list
-  [l]
-  (clojure.core/map list* (shrink-seq l)))
-
-(extend clojure.lang.PersistentList
-  Shrink
-  ;; TODO:
-  ;; this shrink goes into an infinite loop with floats
-  {:shrink shrink-list})
-
-(extend (type '())
-  Shrink
-  {:shrink (constantly [])})
-
-;; Bytes
-;; ---------------------------------------------------------------------------
-
-(def byte (fmap clojure.core/byte (choose 0 127)))
-
-(def bytes (fmap clojure.core/byte-array (vector byte)))
-
-(defn shrink-byte
-  [b]
-  (let [i (clojure.core/int b)]
-    (clojure.core/map clojure.core/byte (shrink i))))
-
-(defn shrink-bytes
-  [bs]
-  (let [vbs (vec bs)]
-    (clojure.core/map clojure.core/byte-array (shrink vbs))))
-
-(extend java.lang.Byte
-  Shrink
-  {:shrink shrink-byte})
-
-(extend (Class/forName "[B")
-  Shrink
-  {:shrink shrink-bytes})
-
-;; Map
-;; ---------------------------------------------------------------------------
-
-(defn map
-  "Create a generator that generates maps, with keys chosen from
-  `ken-gen` and values chosen from `val-gen`."
-  [key-gen val-gen]
-  (make-gen
-    (fn [rand-seed size]
-      (let [map-size (call-gen (choose 0 size) rand-seed size)
-            p (pair key-gen val-gen)]
-        (into {} (repeatedly map-size #(call-gen p rand-seed size)))))))
-
-(defn shrink-map
+(defn int-rose-tree
   [value]
-  [])
-(extend clojure.lang.IPersistentMap
-  Shrink
-  {:shrink shrink-map})
+  [value (clojure.core/map int-rose-tree (shrink-int value))])
 
-;; Character
-;; (generator and shrink strategy pretty much ripped from Haskell impl.)
-;; ---------------------------------------------------------------------------
+(defn rand-range
+  [^Random rnd lower upper]
+  (let [diff (Math/abs (long (- upper lower)))]
+    (if (zero? diff)
+      lower
+      (+ (.nextInt rnd (inc diff)) lower))))
 
-(def char
-  "Generates character from 0-255."
-  (fmap clojure.core/char (choose 0 255)))
-
-(def char-ascii
-  "Generate only ascii character."
-  (fmap clojure.core/char (choose 32 126)))
-
-(def char-alpha-numeric
-  "Generate alpha-numeric characters."
-  (fmap clojure.core/char
-        (one-of [(choose 48 57)
-                 (choose 65 90)
-                 (choose 97 122)])))
-
-(defn- stamp
-  [^Character c]
-  [(not (Character/isLowerCase c))
-   (not (Character/isUpperCase c))
-   (not (Character/isDigit c))
-   (not= \space c)
-   c])
-
-(defn- <-stamp
-  [a b]
-  (neg? (compare (stamp a) (stamp b))))
-
-(defn shrink-char
-  [c]
-  (filter
-    #(<-stamp % c)
-    (concat [\a \b \c]
-            (for [^Character x [c] :while #(Character/isUpperCase ^Character %)]
-              (Character/toLowerCase x))
-            [\A \B \C
-             \1 \2 \3
-             ;; TODO: should newline be here? It will make ascii chars
-             ;; shrink incorrectly. But it's also useful for finding bugs...
-             ;; \newline
-             \space])))
-
-(extend java.lang.Character
-  Shrink
-  {:shrink shrink-char})
-
-;; String
-;; ---------------------------------------------------------------------------
-
-;; TODO: make strings use the full utf-8 range
-
-(defn string-gen
-  [rand-seed size]
-  (clojure.string/join (repeatedly size #(call-gen char rand-seed size))))
-
-(def string
-  "Generate strings."
-  (make-gen string-gen))
-
-(defn string-ascii-gen
-  [rand-seed size]
-  (clojure.string/join (repeatedly size #(call-gen char-ascii rand-seed size))))
-
-(def string-ascii
-  "Generate ascii strings."
-  (make-gen string-ascii-gen))
-
-(defn string-alpha-numeric-gen
-  [rand-seed size]
-  (clojure.string/join (repeatedly size #(call-gen char-alpha-numeric rand-seed size))))
-
-(def string-alpha-numeric
-  "Generate alpha-numeric strings."
-  (make-gen string-alpha-numeric-gen))
-
-(defn shrink-string
-  [s]
-  (clojure.core/map clojure.string/join (shrink-seq s)))
-
-(extend java.lang.String
-  Shrink
-  {:shrink shrink-string})
-
-;; Keyword
-;; ---------------------------------------------------------------------------
-
-(def keyword
-  "Generate keywords."
-  (->> string-alpha-numeric
-       (such-that #(not= "" %))
-       (fmap clojure.core/keyword)))
-
-(defn shrink-keyword
-  [k]
-  (clojure.core/map clojure.core/keyword
-                    (-> k str
-                      rest
-                      clojure.string/join
-                      shrink-string)))
-
-(extend clojure.lang.Keyword
-  Shrink
-  {:shrink shrink-keyword})
-
-;; Ratios
-;; ---------------------------------------------------------------------------
-
-(def ratio
-  (->> (tuple int (such-that (complement zero?) int))
-       (fmap (fn [[a b]] (/ a b)))))
-
-(defn shrink-ratio
-  [ratio]
-  (for [d (shrink (denominator ratio))
-        :when (not (zero? d))
-        n (shrink (numerator ratio))]
-    (/ n d)))
-
-(extend clojure.lang.Ratio
-  Shrink
-  {:shrink shrink-ratio})
+(defn choose
+  "Create a generator that returns numbers in the range
+  `min-range` to `max-range`."
+  [lower upper]
+  (make-gen
+    (fn [^Random rnd _size]
+      (let [value (rand-range rnd lower upper)]
+        [value (clojure.core/map int-rose-tree (shrink-int value))]))))
