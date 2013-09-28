@@ -2,8 +2,27 @@
   (:import java.util.Random)
   (:require [clj-tuple])
   (:refer-clojure :exclude [int vector list map keyword
-                            char boolean byte bytes]))
+                            char boolean byte bytes sequence]))
 
+;; Generic helpers
+;; ---------------------------------------------------------------------------
+
+(defn sequence
+  [bind-fun return-fun ms]
+  (reduce (fn [acc elem]
+            (bind-fun acc
+                      (fn [xs]
+                        (bind-fun elem
+                                  (fn [y]
+                                    (return-fun (conj y xs)))))))
+          (return-fun '())
+          (reverse ms)))
+
+(defn lift
+  [bind-fun return-fun f & ms]
+  (bind-fun (sequence bind-fun return-fun ms)
+            (fn [args]
+              (return-fun (rose-pure (apply f args))))))
 
 ;; RoseTree
 ;; ---------------------------------------------------------------------------
@@ -37,6 +56,15 @@
   [pred [root children]]
   [root (clojure.core/map (partial rose-filter pred)
                           (clojure.core/filter (comp pred rose-root) children))])
+
+(defn zip-rose
+  [f [a-root a-children :as a] [b-root b-children :as b]]
+  "Combine two Rose trees with binary function f"
+  [(f a-root b-root)
+   (clojure.core/map (partial apply zip-rose f)
+                     (concat
+                       (for [b-child b-children] [a b-child])
+                       (for [a-child a-children] [b a-child])))])
 
 ;; Gen
 ;; ---------------------------------------------------------------------------
