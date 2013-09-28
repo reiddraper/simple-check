@@ -140,3 +140,8 @@
   (let [total (apply + (clojure.core/map first pairs))]
     (gen-bind (choose 1 total)
               #(pick pairs (rose-root %)))))
+
+(defn elements
+  [coll]
+  (gen-bind (choose 0 (dec (count coll)))
+            #(gen-pure (rose-fmap (partial nth coll) %))))
