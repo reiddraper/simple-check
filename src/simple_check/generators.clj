@@ -247,16 +247,32 @@
 
 (defn vector
   ([generator]
-  (gen-bind (sized #(choose 0 %))
-            (fn [num-elements-rose]
-              (gen-bind (sequence gen-bind gen-pure
-                                  (repeat (rose-root num-elements-rose)
-                                          generator))
-                        (fn [roses]
-                          (gen-pure (shrink-rose clojure.core/vector
-                                                 roses)))))))
+  (gen-bind
+    (sized #(choose 0 %))
+    (fn [num-elements-rose]
+      (gen-bind (sequence gen-bind gen-pure
+                          (repeat (rose-root num-elements-rose)
+                                  generator))
+                (fn [roses]
+                  (gen-pure (shrink-rose clojure.core/vector
+                                         roses)))))))
   ([generator num-elements]
-   (tuple (repeat num-elements generator))))
+   (tuple (repeat num-elements generator)))
+  ([generator min-elements max-elements]
+   (gen-bind
+     (choose min-elements max-elements)
+     (fn [num-elements-rose]
+       (gen-bind (sequence gen-bind gen-pure
+                           (repeat (rose-root num-elements-rose)
+                                   generator))
+                 (fn [roses]
+                   (gen-bind
+                     (gen-pure (shrink-rose clojure.core/vector
+                                            roses))
+                     (fn [rose]
+                       (gen-pure (rose-filter
+                                   (fn [v] (and (>= (count v) min-elements)
+                                                (<= (count v) max-elements))) rose))))))))))
 
 (defn list
   [generator]
@@ -303,3 +319,13 @@
 
 (def string-alpha-numeric
   (fmap clojure.string/join (vector char-alpha-numeric)))
+
+(def keyword
+  "Generate keywords."
+  (->> string-alpha-numeric
+    (such-that #(not= "" %))
+    (fmap clojure.core/keyword)))
+
+(def ratio
+  (->> (tuple int (such-that (complement zero?) int))
+    (fmap (fn [[a b]] (/ a b)))))
