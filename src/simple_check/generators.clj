@@ -68,10 +68,23 @@
 
 (defn zip-rose
   [f roses]
-  "Combine two Rose trees with binary function f"
   [(apply f (clojure.core/map rose-root roses))
    (clojure.core/map (partial zip-rose f)
                      (rose-permutations roses))])
+
+(defn remove-roses
+  [roses]
+  (concat
+          [(rest roses)]
+          (for [child (rose-children (first roses))]
+            (cons child (rest roses)))))
+
+(defn shrink-rose
+  [f roses]
+  (if (seq roses)
+    [(apply f (clojure.core/map rose-root roses))
+     (clojure.core/map (partial shrink-rose f) (remove-roses roses))]
+    [(f) []]))
 
 ;; Gen
 ;; ---------------------------------------------------------------------------
@@ -231,3 +244,14 @@
 
 (def s-neg-int
   (fmap dec neg-int))
+
+(defn vector
+  [generator]
+  (gen-bind (sized #(choose 0 %))
+            (fn [num-elements-rose]
+              (gen-bind (sequence gen-bind gen-pure
+                                  (repeat (rose-root num-elements-rose)
+                                          generator))
+                        (fn [roses]
+                          (gen-pure (shrink-rose clojure.core/vector
+                                                 roses)))))))
