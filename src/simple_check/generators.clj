@@ -118,6 +118,10 @@
   [f gen]
   (gen-fmap (partial rose-fmap f) gen))
 
+(defn return
+  [value]
+  (gen-pure (rose-pure value)))
+
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 

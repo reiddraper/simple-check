@@ -224,23 +224,23 @@
   (let [first-size (count (first mtx))]
     (every? (partial = first-size) (map count (rest mtx)))))
 
-(deftest proper-matrix-test
+(comment (deftest proper-matrix-test
   (testing
     "can generate proper matrices"
     (is (:result (sc/quick-check
                   100 (prop/for-all
                        [mtx (gen/vector (gen/vector gen/int 3) 3)]
-                       (proper-matrix? mtx)))))))
+                       (proper-matrix? mtx))))))))
 
-(def bounds-and-vector
+(comment (def bounds-and-vector
   (gen/bind (gen/tuple gen/s-pos-int gen/s-pos-int)
             (fn [[a b]]
               (let [minimum (min a b)
                     maximum (max a b)]
                 (gen/tuple (gen/return [minimum maximum])
-                           (gen/vector gen/int minimum maximum))))))
+                           (gen/vector gen/int minimum maximum)))))))
 
-(deftest proper-vector-test
+(comment (deftest proper-vector-test
   (testing
     "can generate vectors with sizes in a provided range"
     (is (:result (sc/quick-check
@@ -249,4 +249,4 @@
                        (let [[[minimum maximum] v] b-and-v
                              c (count v)]
                          (and (<= c maximum)
-                              (>= c minimum)))))))))
+                              (>= c minimum))))))))))
