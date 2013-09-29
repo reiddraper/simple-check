@@ -222,6 +222,9 @@
           (rose-filter pred value)
           (recur rand-seed (+ 1 size)))))))
 
+(def boolean
+  (elements [false true]))
+
 (defn tuple
   [& generators]
   (gen-bind (sequence gen-bind gen-pure generators)
