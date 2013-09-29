@@ -265,7 +265,7 @@
                   (gen-pure (shrink-rose clojure.core/vector
                                          roses)))))))
   ([generator num-elements]
-   (tuple (repeat num-elements generator)))
+   (apply tuple (repeat num-elements generator)))
   ([generator min-elements max-elements]
    (gen-bind
      (choose min-elements max-elements)

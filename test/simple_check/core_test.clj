@@ -224,13 +224,13 @@
   (let [first-size (count (first mtx))]
     (every? (partial = first-size) (map count (rest mtx)))))
 
-(comment (deftest proper-matrix-test
+(deftest proper-matrix-test
   (testing
     "can generate proper matrices"
     (is (:result (sc/quick-check
                   100 (prop/for-all
                        [mtx (gen/vector (gen/vector gen/int 3) 3)]
-                       (proper-matrix? mtx))))))))
+                       (proper-matrix? mtx)))))))
 
 (comment (def bounds-and-vector
   (gen/bind (gen/tuple gen/s-pos-int gen/s-pos-int)
