@@ -1,7 +1,7 @@
 (ns simple-check.generators
   (:import java.util.Random)
   (:require [clj-tuple])
-  (:refer-clojure :exclude [int vector list map keyword
+  (:refer-clojure :exclude [int vector list hash-map map keyword
                             char boolean byte bytes sequence]))
 
 ;; Generic helpers
@@ -246,7 +246,7 @@
   (fmap dec neg-int))
 
 (defn vector
-  [generator]
+  ([generator]
   (gen-bind (sized #(choose 0 %))
             (fn [num-elements-rose]
               (gen-bind (sequence gen-bind gen-pure
@@ -255,3 +255,51 @@
                         (fn [roses]
                           (gen-pure (shrink-rose clojure.core/vector
                                                  roses)))))))
+  ([generator num-elements]
+   (tuple (repeat num-elements generator))))
+
+(defn list
+  [generator]
+  (gen-bind (sized #(choose 0 %))
+            (fn [num-elements-rose]
+              (gen-bind (sequence gen-bind gen-pure
+                                  (repeat (rose-root num-elements-rose)
+                                          generator))
+                        (fn [roses]
+                          (gen-pure (shrink-rose clojure.core/list
+                                                 roses)))))))
+
+(def byte (fmap clojure.core/byte (choose 0 127)))
+
+(def bytes (fmap clojure.core/byte-array (vector byte)))
+
+(defn map
+  [key-gen val-gen]
+  (let [input (vector (tuple key-gen val-gen))]
+    (fmap (partial into {}) input)))
+
+(def hash-map map)
+
+(def char
+  "Generates character from 0-255."
+  (fmap clojure.core/char (choose 0 255)))
+
+(def char-ascii
+  "Generate only ascii character."
+  (fmap clojure.core/char (choose 32 126)))
+
+(def char-alpha-numeric
+  "Generate alpha-numeric characters."
+  (fmap clojure.core/char
+        (one-of [(choose 48 57)
+                 (choose 65 90)
+                 (choose 97 122)])))
+
+(def string
+  (fmap clojure.string/join (vector char)))
+
+(def string-ascii
+  (fmap clojure.string/join (vector char-ascii)))
+
+(def string-alpha-numeric
+  (fmap clojure.string/join (vector char-alpha-numeric)))
