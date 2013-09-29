@@ -2,18 +2,6 @@
   (:require [simple-check.generators :as gen]
             [simple-check.clojure-test :as ct]))
 
-(defn shrink-fun
-  [{shrink-fn :shrink} value]
-  (if shrink-fn
-    (shrink-fn value)
-    (gen/shrink value)))
-
-(defn- run-test
-  [property rng size]
-  (try
-    (gen/call-gen property rng size)
-    (catch Throwable t t)))
-
 (declare shrink-loop failure)
 
 (defn make-rng
@@ -44,23 +32,18 @@
       (if (== so-far num-tests)
         (complete property num-tests created-seed)
         (let [[size & rest-size-seq] size-seq
-              result-map (run-test property rng size)
+              result-map-rose (gen/call-gen property rng size)
+              result-map (gen/rose-root result-map-rose)
               result (:result result-map)
               args (:args result-map)]
           (cond
             (instance? Throwable result) (failure
-                                           property
-                                           (:function result-map)
-                                           result so-far size args
-                                           (:shrink property))
+                                           property result-map-rose
+                                           so-far size)
             result (do
                      (ct/report-trial property so-far num-tests)
                      (recur (inc so-far) rest-size-seq))
-            :default (failure
-                       property
-                       (:function result-map)
-                       result so-far size args
-                       (:shrink property))))))))
+            :default (failure property result-map-rose so-far size)))))))
 
 (defmacro forall [bindings expr]
   `(let [~@bindings]
@@ -72,13 +55,9 @@
    :depth depth
    :smallest smallest-args})
 
-(defn- safe-apply-props
-  [prop args]
-  (try (apply prop args)
-    (catch Throwable t
-      ; assuming that this `t` is of the same type that was
-      ; originally thrown in quick-check...
-      false)))
+(defn not-falsy-or-exception
+  [value]
+  (and value (not (instance? Throwable value))))
 
 (defn- shrink-loop
   "Shrinking a value produces a sequence of smaller values of the same type.
@@ -92,35 +71,41 @@
   * If a node fails the property, search it's children
   The value returned is the left-most failing example at the depth where a
   passing example was found."
-  [prop failing shrink-fun]
-  (let [shrinks-this-depth (shrink-fun failing)]
+  [rose-tree]
+  (let [shrinks-this-depth (gen/rose-children rose-tree)
+        current-failure (:args (gen/rose-root rose-tree))]
     (loop [nodes shrinks-this-depth
-           f failing
+           smallest-failure current-failure
            total-nodes-visited 0
-           depth 0
-           can-set-new-best? true]
-      ; TODO why does this cause failures? (or (empty? nodes) (>= total-nodes-visited 10000))
+           depth 0]
       (if (empty? nodes)
-        (smallest-shrink total-nodes-visited depth f)
-        (let [[head & tail] nodes]
-          (if (safe-apply-props prop head)
-            ;; this node passed the test, so now try testing it's right-siblings
-            (recur tail f (inc total-nodes-visited) depth can-set-new-best?)
-            ;; this node failed the test, so check if it has children,
-            ;; if so, traverse down them. If not, save this as the best example
-            ;; seen now and then look at the right-siblings
-            ;; children
-            (let [children (shrink-fun head)]
-              (if (empty? children)
-                (recur tail head (inc total-nodes-visited) depth false)
-                (recur children head (inc total-nodes-visited) (inc depth) true)))))))))
+        (smallest-shrink total-nodes-visited depth smallest-failure)
+        (let [head (first nodes)
+              tail (rest nodes)]
+          (let [result (:result (gen/rose-root head))
+                args (:args (gen/rose-root head))]
+            (if (not-falsy-or-exception result)
+              ;; this node passed the test, so now try testing it's right-siblings
+              (recur tail smallest-failure (inc total-nodes-visited) depth)
+              ;; this node failed the test, so check if it has children,
+              ;; if so, traverse down them. If not, save this as the best example
+              ;; seen now and then look at the right-siblings
+              ;; children
+              (let [children (gen/rose-children head)]
+                (if (empty? children)
+                  (recur tail args (inc total-nodes-visited) depth)
+                  (recur children args (inc total-nodes-visited) (inc depth)))))))))))
 
 (defn- failure
-  [property property-fun result trial-number size failing-params shrink-fun]
-  (ct/report-failure property result trial-number failing-params)
-  {:result result
-   :failing-size size
-   :num-tests trial-number
-   :fail (vec failing-params)
-   :shrunk (shrink-loop property-fun failing-params shrink-fun)})
+  [property failing-rose-tree trial-number size]
+  (let [root (gen/rose-root failing-rose-tree)
+        result (:result root)
+        failing-args (:args root)]
 
+    (ct/report-failure property result trial-number failing-args)
+
+    {:result result
+     :failing-size size
+     :num-tests trial-number
+     :fail (vec failing-args)
+     :shrunk (shrink-loop failing-rose-tree)}))

@@ -75,9 +75,10 @@
 (defn remove-roses
   [roses]
   (concat
-          [(rest roses)]
-          (for [child (rose-children (first roses))]
-            (cons child (rest roses)))))
+    [(rest roses)]
+    [(drop-last roses)]
+    (for [child (rose-children (first roses))]
+      (cons child (rest roses)))))
 
 (defn shrink-rose
   [f roses]
