@@ -8,15 +8,23 @@
 ;; ---------------------------------------------------------------------------
 
 (defn sequence
-  [bind-fun return-fun ms]
+  [bind-fn return-fn ms]
   (reduce (fn [acc elem]
-            (bind-fun acc
-                      (fn [xs]
-                        (bind-fun elem
-                                  (fn [y]
-                                    (return-fun (conj xs y)))))))
-          (return-fun [])
+            (bind-fn acc
+                     (fn [xs]
+                       (bind-fn elem
+                                (fn [y]
+                                  (return-fn (conj xs y)))))))
+          (return-fn [])
           ms))
+
+(defn fmap-ap-ap
+  [bind-fn return-fn f m1 m2]
+  (bind-fn m1
+           (fn [a]
+             (bind-fn m1
+                      (fn [b]
+                        (return-fn (f a b)))))))
 
 ;;(defn lift
 ;;  [bind-fun return-fun f & ms]
@@ -29,7 +37,9 @@
 
 (defn join-rose
   [[[inner-root inner-children] children]]
-  [inner-root (clojure.core/map join-rose (concat children inner-children))])
+  [inner-root (concat (clojure.core/map join-rose children)
+                      inner-children)])
+
 
 (defn rose-root
   [[root _children]]
@@ -51,6 +61,24 @@
   [m k]
   (join-rose (rose-fmap k m)))
 
+;; swap :: RoseTree (Gen (RoseTree a)) -> Gen (RoseTree (RoseTree a))
+(defn swap
+  [rose]
+  :ok)
+
+(defn traverse-seq
+  [pure-fn fmap-fn xs]
+  (let [cons-f (fn [a] a)]
+    (reduce cons-f (pure-fn []) (reverse xs))))
+
+(defn traverse-rose
+  [bind-fn return-fn fmap-fn f [root children]]
+  (fmap-ap-ap bind-fn return-fn
+              clojure.core/vector
+              (f root)
+              (sequence bind-fn return-fn
+                        (traverse-seq (partial traverse-rose f) children))))
+
 (defn rose-filter
   "Takes a list of roses, not a rose"
   [pred [root children]]
@@ -63,7 +91,7 @@
   [roses]
   (apply concat
          (for [[rose index]
-          (clojure.core/map clojure.core/vector roses (range))]
+               (clojure.core/map clojure.core/vector roses (range))]
            (for [child (rose-children rose)] (assoc roses index child)))))
 
 (defn zip-rose
@@ -94,6 +122,11 @@
   ([generator-fn]
    {:gen generator-fn}))
 
+(defn call-gen
+  [{generator-fn :gen} rnd size]
+  (generator-fn rnd size))
+
+
 (defn gen-pure
   [value]
   (make-gen
@@ -122,16 +155,27 @@
   [value]
   (gen-pure (rose-pure value)))
 
+;; RoseTree (Gen (RoseTree a)) -> Gen (RoseTree a)
+(defn bind-helper
+  [k]
+  (fn [rose]
+    (gen-fmap join-rose
+              (make-gen
+                (fn [rnd size]
+                  (rose-fmap #(call-gen % rnd size)
+                             (rose-fmap k rose)))))))
+
+;; fmap joinRose $ m >>= \y -> s $ fmap k y
+(defn bind
+  [generator k]
+  (gen-bind generator (bind-helper k)))
+
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
 (defn random
   ([] (Random.))
   ([seed] (Random. seed)))
-
-(defn call-gen
-  [{generator-fn :gen} rnd size]
-  (generator-fn rnd size))
 
 (defn make-size-range-seq
   [max-size]
@@ -215,8 +259,10 @@
 
 (defn elements
   [coll]
-  (gen-bind (choose 0 (dec (count coll)))
-            #(gen-pure (rose-fmap (partial nth coll) %))))
+  (if (coll? coll)
+    (gen-bind (choose 0 (dec (count coll)))
+              #(gen-pure (rose-fmap (partial nth coll) %)))
+    (println coll)))
 
 (defn such-that
   [pred gen]
@@ -255,15 +301,15 @@
 
 (defn vector
   ([generator]
-  (gen-bind
-    (sized #(choose 0 %))
-    (fn [num-elements-rose]
-      (gen-bind (sequence gen-bind gen-pure
-                          (repeat (rose-root num-elements-rose)
-                                  generator))
-                (fn [roses]
-                  (gen-pure (shrink-rose clojure.core/vector
-                                         roses)))))))
+   (gen-bind
+     (sized #(choose 0 %))
+     (fn [num-elements-rose]
+       (gen-bind (sequence gen-bind gen-pure
+                           (repeat (rose-root num-elements-rose)
+                                   generator))
+                 (fn [roses]
+                   (gen-pure (shrink-rose clojure.core/vector
+                                          roses)))))))
   ([generator num-elements]
    (apply tuple (repeat num-elements generator)))
   ([generator min-elements max-elements]
