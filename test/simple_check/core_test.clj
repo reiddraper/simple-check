@@ -190,6 +190,16 @@
                 (print "")
                 (= a 42)))
 
+(deftest constant-generators-dont-shrink
+  (testing
+    "Generators created with `gen/return` should not shrink"
+    (is (= [42]
+           (let [result (sc/quick-check 100
+                                        (prop/for-all
+                                          [a (gen/return 42)]
+                                          false))]
+             (-> result :shrunk :smallest))))))
+
 ;; Tests are deterministic
 ;; ---------------------------------------------------------------------------
 
@@ -250,3 +260,19 @@
                              c (count v)]
                          (and (<= c maximum)
                               (>= c minimum)))))))))
+
+;; Bind works
+;; ---------------------------------------------------------------------------
+
+(def nat-vec
+  (gen/such-that not-empty
+                 (gen/vector gen/nat)))
+
+(def vec-and-elem
+  (gen/bind nat-vec
+            (fn [v]
+              (gen/tuple (gen/elements v) (gen/return v)))))
+
+(defspec element-is-in-vec 100
+  (prop/for-all [[element coll] vec-and-elem]
+                (some #{element} coll)))

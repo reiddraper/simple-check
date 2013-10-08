@@ -105,8 +105,7 @@
   (concat
     [(rest roses)]
     [(drop-last roses)]
-    (for [child (rose-children (first roses))]
-      (cons child (rest roses)))))
+    (rose-permutations (vec roses))))
 
 (defn shrink-rose
   [f roses]
@@ -179,7 +178,7 @@
 
 (defn make-size-range-seq
   [max-size]
-  (cycle (range 1 max-size)))
+  (cycle (range 0 max-size)))
 
 (defn sample-seq
   ([generator] (sample-seq generator 100))
@@ -339,7 +338,7 @@
                           (gen-pure (shrink-rose clojure.core/list
                                                  roses)))))))
 
-(def byte (fmap clojure.core/byte (choose 0 127)))
+(def byte (fmap clojure.core/byte (choose 0 255)))
 
 (def bytes (fmap clojure.core/byte-array (vector byte)))
 

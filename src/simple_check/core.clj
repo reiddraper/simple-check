@@ -106,6 +106,6 @@
 
     {:result result
      :failing-size size
-     :num-tests trial-number
+     :num-tests (inc trial-number)
      :fail (vec failing-args)
      :shrunk (shrink-loop failing-rose-tree)}))
