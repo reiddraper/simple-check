@@ -240,7 +240,7 @@
       (let [value (call-gen gen rand-seed size)]
         (if (pred (rose-root value))
           (rose-filter pred value)
-          (recur rand-seed (+ 1 size)))))))
+          (recur rand-seed (inc size)))))))
 
 (def boolean
   (elements [false true]))
@@ -350,5 +350,7 @@
     (fmap clojure.core/keyword)))
 
 (def ratio
-  (->> (tuple int (such-that (complement zero?) int))
-    (fmap (fn [[a b]] (/ a b)))))
+  (fmap
+    (fn [[a b]] (/ a b))
+    (tuple int
+           (such-that (complement zero?) int))))
