@@ -18,20 +18,6 @@
           (return-fn [])
           ms))
 
-(defn fmap-ap-ap
-  [bind-fn return-fn f m1 m2]
-  (bind-fn m1
-           (fn [a]
-             (bind-fn m1
-                      (fn [b]
-                        (return-fn (f a b)))))))
-
-;;(defn lift
-;;  [bind-fun return-fun f & ms]
-;;  (bind-fun (sequence bind-fun return-fun ms)
-;;            (fn [args]
-;;              (return-fun (rose-pure (apply f args))))))
-
 ;; RoseTree
 ;; ---------------------------------------------------------------------------
 
@@ -39,7 +25,6 @@
   [[[inner-root inner-children] children]]
   [inner-root (concat (clojure.core/map join-rose children)
                       inner-children)])
-
 
 (defn rose-root
   [[root _children]]
@@ -61,23 +46,10 @@
   [m k]
   (join-rose (rose-fmap k m)))
 
-;; swap :: RoseTree (Gen (RoseTree a)) -> Gen (RoseTree (RoseTree a))
-(defn swap
-  [rose]
-  :ok)
-
 (defn traverse-seq
   [pure-fn fmap-fn xs]
   (let [cons-f (fn [a] a)]
     (reduce cons-f (pure-fn []) (reverse xs))))
-
-(defn traverse-rose
-  [bind-fn return-fn fmap-fn f [root children]]
-  (fmap-ap-ap bind-fn return-fn
-              clojure.core/vector
-              (f root)
-              (sequence bind-fn return-fn
-                        (traverse-seq (partial traverse-rose f) children))))
 
 (defn rose-filter
   "Takes a list of roses, not a rose"
@@ -154,7 +126,6 @@
   [value]
   (gen-pure (rose-pure value)))
 
-;; RoseTree (Gen (RoseTree a)) -> Gen (RoseTree a)
 (defn bind-helper
   [k]
   (fn [rose]
@@ -164,7 +135,6 @@
                   (rose-fmap #(call-gen % rnd size)
                              (rose-fmap k rose)))))))
 
-;; fmap joinRose $ m >>= \y -> s $ fmap k y
 (defn bind
   [generator k]
   (gen-bind generator (bind-helper k)))
