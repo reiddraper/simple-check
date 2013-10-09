@@ -46,11 +46,6 @@
   [m k]
   (join-rose (rose-fmap k m)))
 
-(defn traverse-seq
-  [pure-fn fmap-fn xs]
-  (let [cons-f (fn [a] a)]
-    (reduce cons-f (pure-fn []) (reverse xs))))
-
 (defn rose-filter
   "Takes a list of roses, not a rose"
   [pred [root children]]
@@ -96,7 +91,6 @@
 (defn call-gen
   [{generator-fn :gen} rnd size]
   (generator-fn rnd size))
-
 
 (defn gen-pure
   [value]
@@ -164,22 +158,22 @@
    (take num-samples (sample-seq generator))))
 
 
-;; Combinators and helpers
+;; Internal Helpers
 ;; ---------------------------------------------------------------------------
 
-(defn halfs
+(defn- halfs
   [n]
   (take-while (partial not= 0) (iterate #(quot % 2) n)))
 
-(defn shrink-int
+(defn- shrink-int
   [integer]
   (clojure.core/map (partial - integer) (halfs integer)))
 
-(defn int-rose-tree
+(defn- int-rose-tree
   [value]
   [value (clojure.core/map int-rose-tree (shrink-int value))])
 
-(defn rand-range
+(defn- rand-range
   [^Random rnd lower upper]
   (let [diff (Math/abs (long (- upper lower)))]
     (if (zero? diff)
@@ -192,6 +186,9 @@
     (fn [rnd size]
       (let [sized-gen (sized-gen size)]
         (call-gen sized-gen rnd size)))))
+
+;; Combinators and helpers
+;; ---------------------------------------------------------------------------
 
 (defn resize
   [n {gen :gen}]
