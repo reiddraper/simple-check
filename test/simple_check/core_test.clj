@@ -276,3 +276,20 @@
 (defspec element-is-in-vec 100
   (prop/for-all [[element coll] vec-and-elem]
                 (some #{element} coll)))
+
+;; fmap is respected during shrinking
+;; ---------------------------------------------------------------------------
+
+(def plus-fifty
+  (gen/fmap (partial + 50) gen/nat))
+
+(deftest f-map-respected-during-shrinking
+  (testing
+    "Generators created fmap should have that function applied
+    during shrinking"
+    (is (= [50]
+           (let [result (sc/quick-check 100
+                                        (prop/for-all
+                                          [a plus-fifty]
+                                          false))]
+             (-> result :shrunk :smallest))))))
