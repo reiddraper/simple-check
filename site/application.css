@@ -1,0 +1,97 @@
+/* http://meyerweb.com/eric/tools/css/reset/
+   v2.0 | 20110126
+   License: none (public domain)
+*/
+
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed,
+figure, figcaption, footer, header, hgroup,
+menu, nav, output, ruby, section, summary,
+time, mark, audio, video {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	font-size: 100%;
+	font: inherit;
+	vertical-align: baseline;
+}
+/* HTML5 display-role reset for older browsers */
+article, aside, details, figcaption, figure,
+footer, header, hgroup, menu, nav, section {
+	display: block;
+}
+body {
+	line-height: 1;
+}
+ol, ul {
+	list-style: none;
+}
+blockquote, q {
+	quotes: none;
+}
+blockquote:before, blockquote:after,
+q:before, q:after {
+	content: '';
+	content: none;
+}
+table {
+	border-collapse: collapse;
+	border-spacing: 0;
+}
+
+/* -------------------------------------------------------------------------*/
+/* Application */
+/* -------------------------------------------------------------------------*/
+
+body {
+    color: #333333;
+    background-color: rgb(240, 240, 240);;
+    font-family: 'Roboto Condensed', sans-serif;
+    padding: 0 2% 1em 0em;
+    max-width: 50em;
+}
+
+ul {
+    list-style-type: disc;
+    padding-left: 2em;
+
+}
+
+h1 {
+    font-size: 2em;
+    padding: 1em 0 0.5em 2%;
+}
+
+h2 {
+    font-size: 1.5em;
+    padding: 1em 0 0.5em 2%;
+}
+
+h3 {
+    font-size: 1.25em;
+    padding: 0.25em 0 0.25em 0em;
+}
+
+p {
+    font-family: Times;
+    font-size: 1.1em;
+    padding: 1em 0 1em 2%;
+}
+
+code {
+    font-family: 'Courier';
+    color: rgb(0, 110, 109);
+    padding: 1em 0 1em 2%;
+}
+
+#title {
+    text-transform: uppercase;
+}
