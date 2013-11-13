@@ -468,7 +468,7 @@
                                                 (<= (count v) max-elements))) rose))))))))))
 
 (defn list
-  "Like `vector`, but generators lists."
+  "Like `vector`, but generates lists."
   [generator]
   (gen-bind (sized #(choose 0 %))
             (fn [num-elements-rose]
