@@ -19,12 +19,17 @@
 (defn quick-check
   "Tests `property` `num-tests` times.
 
+  - max-shrink-time-ms - unbounded by default, when specified will try to limit
+  the running time of a shrink function by the specified number of
+  milliseconds.
+
   Examples:
 
       (def p (for-all [a gen/pos-int] (> (* a a) a)))
       (quick-check 100 p)
   "
-  [num-tests property & {:keys [seed max-size] :or {max-size 200}}]
+  [num-tests property & {:keys [seed max-size max-shrink-time-ms]
+                         :or {max-size 200}}]
   (let [[created-seed rng] (make-rng seed)
         size-seq (gen/make-size-range-seq max-size)]
     (loop [so-far 0
@@ -39,11 +44,12 @@
           (cond
             (instance? Throwable result) (failure
                                            property result-map-rose
-                                           so-far size)
+                                           so-far size max-shrink-time-ms)
             result (do
                      (ct/report-trial property so-far num-tests)
                      (recur (inc so-far) rest-size-seq))
-            :default (failure property result-map-rose so-far size)))))))
+            :default (failure property result-map-rose so-far size
+                              max-shrink-time-ms)))))))
 
 (defn- smallest-shrink
   [total-nodes-visited depth smallest]
@@ -57,6 +63,12 @@
   [value]
   (and value (not (instance? Throwable value))))
 
+(defn- current-nanos []
+  (System/nanoTime))
+
+(defn- millis-since [last-nanos]
+  (/ (- (current-nanos) last-nanos) (* 1000 1000)))
+
 (defn- shrink-loop
   "Shrinking a value produces a sequence of smaller values of the same type.
   Each of these values can then be shrunk. Think of this as a tree. We do a
@@ -69,13 +81,15 @@
   * If a node fails the property, search it's children
   The value returned is the left-most failing example at the depth where a
   passing example was found."
-  [rose-tree]
-  (let [shrinks-this-depth (gen/rose-children rose-tree)]
+  [rose-tree shrink-time-ms]
+  (let [start-time (current-nanos)
+        shrinks-this-depth (gen/rose-children rose-tree)]
     (loop [nodes shrinks-this-depth
            current-smallest (gen/rose-root rose-tree)
            total-nodes-visited 0
            depth 0]
-      (if (empty? nodes)
+      (if (or (and shrink-time-ms (> (millis-since start-time) shrink-time-ms))
+              (empty? nodes))
         (smallest-shrink total-nodes-visited depth current-smallest)
         (let [head (first nodes)
               tail (rest nodes)]
@@ -93,7 +107,7 @@
                   (recur children (gen/rose-root head) (inc total-nodes-visited) (inc depth)))))))))))
 
 (defn- failure
-  [property failing-rose-tree trial-number size]
+  [property failing-rose-tree trial-number size shrink-time-ms]
   (let [root (gen/rose-root failing-rose-tree)
         result (:result root)
         failing-args (:args root)]
@@ -104,4 +118,4 @@
      :failing-size size
      :num-tests (inc trial-number)
      :fail (vec failing-args)
-     :shrunk (shrink-loop failing-rose-tree)}))
+     :shrunk (shrink-loop failing-rose-tree shrink-time-ms)}))

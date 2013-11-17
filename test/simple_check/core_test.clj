@@ -413,3 +413,25 @@
                     #(and (<= mini %) (>= maxi %))
                     (gen/rose-seq tree)))))
 
+;; shrinking can be bounded in time
+;; ---------------------------------------------------------------------------
+
+(defn- slow-fn [s1 s2]
+  (Thread/sleep 10)
+  (= (subs s1 0 (min (count s1) 3000))
+     (subs s2 0 (min (count s2) 3000))))
+
+(defn- elapsed-time [f]
+  (let [start (System/nanoTime)]
+    (f)
+    (/ (double (- (System/nanoTime) start)) 1000000.0)))
+
+(defn- check-fn [p shrink-time]
+  #(sc/quick-check 10 p :max-shrink-time-ms shrink-time))
+
+(deftest shrink-bound
+  (testing "Bounds shrink time"
+    (let [p (prop/for-all* [(gen/resize 3000 gen/string-alpha-numeric)
+                            (gen/resize 3000 gen/string-alpha-numeric)] slow-fn)]
+      (is (> 100 (elapsed-time (check-fn p 0)) 1))
+      (is (> 1000 (elapsed-time (check-fn p 500)) 100)))))
