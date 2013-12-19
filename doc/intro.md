@@ -54,7 +54,7 @@ to fail. For example, the function might originally fail with input:
 ;; =>           :smallest [[0 -1]]}}
 ```
 
-This process of shrinking is down automatically, even for our more complex
+This process of shrinking is done automatically, even for our more complex
 generators that we write ourselves.
 
 ## Generators
