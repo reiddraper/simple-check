@@ -218,7 +218,7 @@ To put it all together, we'll use `fmap` to call our record constructor, and
                        email-gen
                        gen/boolean)))
 
-(last (gen/sample user))
+(last (gen/sample user-gen))
 ;; => #user.User{:user-name "kWodcsE2",
 ;;               :user-id 1,
 ;;               :email "r2ed3VE@computer.org",
