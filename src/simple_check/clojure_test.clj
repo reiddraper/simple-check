@@ -30,7 +30,8 @@
                         ::defspec true
                         :test `#(#'assert-check (assoc (~name) :test-var (str '~name))))
         ([] (~name ~default-times))
-        ([times# & {:keys [seed# max-size#] :as quick-check-opts#}]
+        ([times# & {:keys [seed# max-size# max-shrink-time-ms#]
+                    :as quick-check-opts#}]
          (apply
            simple-check.core/quick-check
            times#
