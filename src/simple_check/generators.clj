@@ -495,7 +495,7 @@
                                                 (<= (count v) max-elements))) rose))))))))))
 
 (defn list
-  "Like `vector`, but generators lists."
+  "Like `vector`, but generates lists."
   [generator]
   (gen-bind (sized #(choose 0 %))
             (fn [num-elements-rose]
@@ -517,9 +517,10 @@
 (defn map
   "Create a generator that generates maps, with keys chosen from
   `ken-gen` and values chosen from `val-gen`."
-  [key-gen val-gen]
-  (let [input (vector (tuple key-gen val-gen))]
-    (fmap (partial into {}) input)))
+  ([key-gen val-gen] (sized #(map key-gen val-gen 0 %)))
+  ([key-gen val-gen min-elements max-elements]
+   (let [input (vector (tuple key-gen val-gen) min-elements max-elements)]
+     (fmap (partial into {}) input))))
 
 (defn hash-map
   "Like clojure.core/hash-map, except the values are generators.
