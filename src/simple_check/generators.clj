@@ -327,7 +327,7 @@
 
   Examples:
 
-      (one-of [gen/int gen/boolean (gen/vector gen/int)])
+      (gen/one-of [gen/int gen/boolean (gen/vector gen/int)])
 
   "
   [generators]
@@ -379,7 +379,7 @@
   Examples:
 
       ;; generate non-empty vectors of integers
-      (such-that not-empty (gen/vector gen/int))
+      (gen/such-that not-empty (gen/vector gen/int))
   "
   [pred gen]
   (make-gen
@@ -427,7 +427,7 @@
   Examples:
 
       (def t (tuple gen/int gen/boolean))
-      (sample t)
+      (gen/sample t)
       ;; => ([1 true] [2 true] [2 false] [1 false] [0 true] [-2 false] [-6 false]
       ;; =>  [3 true] [-4 false] [9 true]))
   "
